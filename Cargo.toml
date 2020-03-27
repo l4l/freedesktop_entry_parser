@@ -1,0 +1,20 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+[package]
+name = "freedesktop_entry_parser"
+version = "0.2.0"
+authors = ["zethra <benaagoldberg@gmail.com>"]
+description = "A library for parsing FreeDesktop entry files"
+categories = ["os", "os::unix-apis"]
+keywords = ["linux", "icons", "freedesktop"]
+repository = "https://git.sr.ht/~zethra/linicon"
+documentation = "https://docs.rs/freedesktop_entry_parser"
+edition = "2018"
+readme = "../README.md"
+license = "MPL-2.0"
+
+[dependencies]
+anyhow = "1.0"
+nom = "5.1"
