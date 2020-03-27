@@ -1,0 +1,15 @@
+image: alpine/edge
+packages:
+  - rust
+  - cargo
+  - faenza-icon-theme
+sources:
+  - https://git.sr.ht/~zethra/linicon
+tasks:
+  - build: |
+      cd linicon
+      cargo build
+  - test: |
+      export XDG_DATA_DIRS=$XDG_DATA_DIRS:/usr/share
+      cd linicon
+      cargo test
