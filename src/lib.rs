@@ -26,13 +26,13 @@
 //!         AttrBytes { name: b"Icon", value: b"firefox"},
 //!     ]
 //! });
-//! # Ok::<(), Error>(())
+//! # Ok::<(), ParseError>(())
 //! ```
 
 mod debug;
+mod errors;
 
-pub use anyhow::Error;
-use anyhow::{anyhow, Result};
+pub use errors::ParseError;
 use nom::{
     bytes::complete::{tag, take_till, take_till1},
     error::ErrorKind,
@@ -41,7 +41,6 @@ use nom::{
     IResult,
 };
 use std::iter::Iterator;
-use std::str::from_utf8;
 
 /// A name and value pair from a [`SectionBytes`](struct.SectionBytes.html)
 #[derive(PartialEq, Eq)]
@@ -109,21 +108,20 @@ pub struct EntryIter<'a> {
 }
 
 impl<'a> EntryIter<'a> {
-    fn next_section(&mut self) -> Result<SectionBytes<'a>> {
+    fn next_section(&mut self) -> Result<SectionBytes<'a>, ParseError> {
         if !self.found_start {
-            self.rem = find_start(self.rem).map_err(format_nom_err)?;
+            self.rem = find_start(self.rem)?;
             self.found_start = true;
         }
-        let (rem, _): (&[u8], &[u8]) =
-            take_till(|c| c == '[' as u8)(self.rem).map_err(format_nom_err)?;
-        let (rem, section_bytes) = section(rem).map_err(format_nom_err)?;
+        let (rem, _): (&[u8], &[u8]) = take_till(|c| c == '[' as u8)(self.rem)?;
+        let (rem, section_bytes) = section(rem)?;
         self.rem = rem;
         Ok(section_bytes)
     }
 }
 
 impl<'a> Iterator for EntryIter<'a> {
-    type Item = Result<SectionBytes<'a>>;
+    type Item = Result<SectionBytes<'a>, ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.rem.is_empty() {
@@ -139,20 +137,6 @@ pub fn parse_entry<'a>(input: &'a [u8]) -> EntryIter<'a> {
     EntryIter {
         rem: input,
         found_start: false,
-    }
-}
-
-fn format_nom_err(
-    e: nom::Err<(&[u8], nom::error::ErrorKind)>,
-) -> anyhow::Error {
-    match e {
-        nom::Err::Error((bytes, kind)) | nom::Err::Failure((bytes, kind)) => {
-            match from_utf8(bytes) {
-                Ok(s) => anyhow!("{} at `{}`", kind.description(), s),
-                Err(e) => e.into(),
-            }
-        }
-        nom::Err::Incomplete(_) => anyhow!("Incomplete Input"),
     }
 }
 
