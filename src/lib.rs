@@ -22,9 +22,9 @@
 //! assert_eq!(parse_entry(file).next().unwrap()?, SectionBytes {
 //!     title: b"Desktop Entry",
 //!     attrs: vec![
-//!         AttrBytes { name: b"Name", value: b"Firefox"},
-//!         AttrBytes { name: b"Exec", value: b"firefox %u"},
-//!         AttrBytes { name: b"Icon", value: b"firefox"},
+//!         AttrBytes { name: b"Name", value: b"Firefox", param: None},
+//!         AttrBytes { name: b"Exec", value: b"firefox %u", param: None},
+//!         AttrBytes { name: b"Icon", value: b"firefox", param: None},
 //!     ]
 //! });
 //! # Ok::<(), freedesktop_entry_parser::ParseError>(())

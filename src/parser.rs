@@ -13,6 +13,18 @@ use std::iter::Iterator;
 pub struct AttrBytes<'a> {
     pub name: &'a [u8],
     pub value: &'a [u8],
+    /// Some attributes have a parameter like `GenericName[es]=Navegador web`
+    /// If it does this field will be present
+    pub param: Option<ParamBytes<'a>>,
+}
+
+/// A param value and attribute name
+#[derive(PartialEq, Eq)]
+pub struct ParamBytes<'a> {
+    /// Value of the the param, ex. `es`
+    pub param: &'a [u8],
+    /// Name of the attribute without the param ex `GenericName`
+    pub attr_name: &'a [u8],
 }
 
 /// One section on a entry file
@@ -28,10 +40,12 @@ fn not_whitespace(c: u8) -> bool {
     c != '\n' as u8 && c != '\t' as u8 && c != '\r' as u8 && c != ' ' as u8
 }
 
+/// Parse a header line.  Return the header name
 fn header(input: &[u8]) -> IResult<&[u8], &[u8]> {
     delimited(tag(b"["), take_till1(|c| c == ']' as u8), tag(b"]"))(input)
 }
 
+/// Find the next line, ignoring comments
 fn next_line(input: &[u8]) -> Result<&[u8], nom::Err<(&[u8], ErrorKind)>> {
     if input.is_empty() {
         return Ok(b"");
@@ -49,6 +63,14 @@ fn find_start(input: &[u8]) -> Result<&[u8], nom::Err<(&[u8], ErrorKind)>> {
     Ok(rem)
 }
 
+/// Parse attr params
+fn params(input: &[u8]) -> IResult<&[u8], ParamBytes> {
+    let (rem, attr_name) =
+        terminated(take_till(|c| c == '[' as u8), tag(b"["))(input)?;
+    let (rem, param) = take_till(|c| c == ']' as u8)(rem)?;
+    Ok((rem, ParamBytes { attr_name, param }))
+}
+
 fn attr(input: &[u8]) -> IResult<&[u8], AttrBytes> {
     if input.get(0) == Some(&('[' as u8)) {
         return Err(nom::Err::Error((input, ErrorKind::Complete)));
@@ -56,7 +78,15 @@ fn attr(input: &[u8]) -> IResult<&[u8], AttrBytes> {
     let (rem, name) =
         terminated(take_till(|c| c == '=' as u8), tag(b"="))(input)?;
     let (rem, value) = take_till(|c| c == '\n' as u8)(rem)?;
-    Ok((next_line(rem)?, AttrBytes { name, value }))
+
+    Ok((
+        next_line(rem)?,
+        AttrBytes {
+            name,
+            value,
+            param: params(name).ok().map(|(_, param)| param),
+        },
+    ))
 }
 
 fn section(input: &[u8]) -> IResult<&[u8], SectionBytes> {
@@ -172,7 +202,26 @@ mod test {
                     &b""[..],
                     AttrBytes {
                         name: &b"hello"[..],
-                        value: &b"world"[..]
+                        value: &b"world"[..],
+                        param: None,
+                    }
+                ))
+            );
+        }
+
+        #[test]
+        fn with_param() {
+            assert_eq!(
+                attr(b"hello[en]=world"),
+                Ok((
+                    &b""[..],
+                    AttrBytes {
+                        name: &b"hello[en]"[..],
+                        value: &b"world"[..],
+                        param: Some(ParamBytes {
+                            attr_name: &b"hello"[..],
+                            param: &b"en"[..]
+                        }),
                     }
                 ))
             );
@@ -186,7 +235,8 @@ mod test {
                     &b""[..],
                     AttrBytes {
                         name: &b"hello"[..],
-                        value: &b"world today"[..]
+                        value: &b"world today"[..],
+                        param: None,
                     }
                 ))
             );
@@ -200,7 +250,8 @@ mod test {
                     &b""[..],
                     AttrBytes {
                         name: &b"hello"[..],
-                        value: &b""[..]
+                        value: &b""[..],
+                        param: None,
                     }
                 ))
             );
@@ -214,7 +265,8 @@ mod test {
                     &b""[..],
                     AttrBytes {
                         name: &b""[..],
-                        value: &b"world"[..]
+                        value: &b"world"[..],
+                        param: None,
                     }
                 ))
             );
@@ -243,11 +295,13 @@ mod test {
                         attrs: vec![
                             AttrBytes {
                                 name: &b"Size"[..],
-                                value: &b"48"[..]
+                                value: &b"48"[..],
+                                param: None,
                             },
                             AttrBytes {
                                 name: &b"Scale"[..],
-                                value: &b"1"[..]
+                                value: &b"1"[..],
+                                param: None,
                             }
                         ]
                     }
@@ -295,7 +349,19 @@ mod test {
             sections[0].attrs[1],
             AttrBytes {
                 name: &b"Name"[..],
-                value: &b"Firefox"[..]
+                value: &b"Firefox"[..],
+                param: None,
+            }
+        );
+        assert_eq!(
+            sections[0].attrs[4],
+            AttrBytes {
+                name: &b"GenericName[ast]"[..],
+                value: &b"Restolador Web"[..],
+                param: Some(ParamBytes {
+                    attr_name: &b"GenericName"[..],
+                    param: &b"ast"[..]
+                }),
             }
         );
     }
