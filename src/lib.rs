@@ -38,3 +38,47 @@ pub use crate::parser::parse_entry;
 pub use crate::parser::AttrBytes;
 pub use crate::parser::SectionBytes;
 pub use errors::ParseError;
+
+use std::path::Path;
+
+pub struct Entry {}
+
+impl Entry {
+    pub fn parse(input: impl AsRef<[u8]>) -> Result<Self, ParseError> {
+        todo!()
+    }
+
+    pub fn parse_file(file_name: impl AsRef<Path>) -> Result<Self, ParseError> {
+        todo!()
+    }
+
+    pub fn section(&self, name: impl AsRef<str>) -> &Section {
+        todo!()
+    }
+
+    pub fn sections(&self) -> &[Section] {
+        todo!()
+    }
+}
+
+pub struct Section {}
+
+impl Section {
+    pub fn attr(&self, name: impl AsRef<str>) -> Option<&str> {
+        todo!()
+    }
+
+    pub fn attr_with_param(
+        &self,
+        name: impl AsRef<str>,
+        param_val: impl AsRef<str>,
+    ) -> Option<&str> {
+        todo!()
+    }
+
+    pub fn attrs(&self) -> &[Attr] {
+        todo!()
+    }
+}
+
+pub struct Attr {}
