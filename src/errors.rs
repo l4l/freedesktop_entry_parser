@@ -1,18 +1,34 @@
 use nom::error::ErrorKind;
 use thiserror::Error;
 
+/// An error that occurred while parsing. This is the general error type for
+/// this library.
 #[derive(Debug, Error)]
 pub enum ParseError {
+    /// Parse encountered some other error.
+    /// This is probably the most common error.
     #[error("Error parings input: {} at {at}", .kind.description())]
-    Other { at: ErrorBytes, kind: ErrorKind },
+    Other {
+        /// Remain input when error occurred
+        at: ErrorBytes,
+        /// Type of error
+        kind: ErrorKind,
+    },
+    /// Parser couldn't finish due to incomplete input
     #[error("Incomplete input")]
     Incomplete,
 }
 
+/// The remaining input from the parser.  Useful for debugging to see where the
+/// parser failed.  This is used in [`ParseError`](struct.ParseError.html).
+/// It'll be `Valid` if the remaining input was a valid string and `Invalid` if
+/// it wasn't
 #[derive(Debug, Error)]
 pub enum ErrorBytes {
+    /// Input was a valid string
     #[error("`{0}`")]
     Valid(String),
+    /// Input was not a valid string
     #[error("`{0:?}`")]
     Invalid(Vec<u8>),
 }

@@ -30,7 +30,7 @@
 //! ```
 
 mod debug;
-mod errors;
+pub mod errors;
 
 pub use errors::ParseError;
 use nom::{
