@@ -309,4 +309,38 @@ mod test {
             );
         }
     }
+
+    #[test]
+    fn parse_icon_index() {
+        let input = include_bytes!("./../test_data/gnome-index.theme");
+        let sections = parse_entry(input)
+            .collect::<Result<Vec<_>, _>>()
+            .expect("Error parsing input");
+        assert_eq!(sections.len(), 68);
+    }
+
+    #[test]
+    fn parse_firefox_desktop_entry() {
+        let input = include_bytes!("./../test_data/firefox.desktop");
+        let sections = parse_entry(input)
+            .collect::<Result<Vec<_>, _>>()
+            .expect("Error parsing input");
+        assert_eq!(sections.len(), 3);
+        assert_eq!(
+            sections[0].attrs[1],
+            AttrBytes {
+                name: &b"Name"[..],
+                value: &b"Firefox"[..]
+            }
+        );
+    }
+
+    #[test]
+    fn parse_sshd_systemd_unit() {
+        let input = include_bytes!("./../test_data/sshd.service");
+        let sections = parse_entry(input)
+            .collect::<Result<Vec<_>, _>>()
+            .expect("Error parsing input");
+        assert_eq!(sections.len(), 3);
+    }
 }
