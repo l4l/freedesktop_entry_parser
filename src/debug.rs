@@ -2,7 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::parser::{AttrBytes, ParamBytes, SectionBytes};
+use crate::{
+    parser::{AttrBytes, ParamBytes, SectionBytes},
+    SP,
+};
 use std::fmt::{Debug, Formatter, Result};
 use std::str::from_utf8;
 
@@ -51,5 +54,13 @@ impl<'a> Debug for ParamBytes<'a> {
             .field("attr_name", &attr_name)
             .field("param", &param)
             .finish()
+    }
+}
+
+impl Debug for SP {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        // SAFETY: This is safe because the reference is dropped at the end of
+        // the fn
+        unsafe { self.0.as_ref().fmt(f) }
     }
 }

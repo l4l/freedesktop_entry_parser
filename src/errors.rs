@@ -1,4 +1,5 @@
 use nom::error::ErrorKind;
+use std::str::Utf8Error;
 use thiserror::Error;
 
 /// An error that occurred while parsing. This is the general error type for
@@ -17,6 +18,8 @@ pub enum ParseError {
     /// Parser couldn't finish due to incomplete input
     #[error("Incomplete input")]
     Incomplete,
+    #[error("Error parsing string to utf8")]
+    Utf8Error { bytes: Vec<u8>, source: Utf8Error },
 }
 
 /// The remaining input from the parser.  Useful for debugging to see where the
