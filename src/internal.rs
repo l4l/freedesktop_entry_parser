@@ -105,21 +105,15 @@ impl Internal {
         attr_name: &str,
         param_name: Option<&str>,
     ) -> Option<&'a str> {
-        self.get_section(section_name)
-            .map(|attr_map| {
-                attr_map
-                    .get_attr(attr_name)
-                    .map(|attr_val| match param_name {
-                        Some(param_name) => attr_val
-                            .param_map
-                            .as_ref()
-                            .map(|param_map| param_map.get_param(param_name))
-                            .flatten(),
-                        None => attr_val.get_value(),
-                    })
-            })
-            .flatten()
-            .flatten()
+        let section_map = self.get_section(section_name)?;
+        let attr_val = section_map.get_attr(attr_name)?;
+        match param_name {
+            Some(param_name) => {
+                let param_map = attr_val.param_map.as_ref()?;
+                param_map.get_param(param_name)
+            }
+            None => attr_val.get_value(),
+        }
     }
 
     pub(crate) fn section_names_iter<'a>(
@@ -141,17 +135,10 @@ impl Internal {
         section_name: &str,
         attr_name: &str,
     ) -> Option<ParamNamesIter<'a>> {
-        self.get_section(section_name)
-            .map(|attr_map| {
-                attr_map.get_attr(attr_name).map(|attr_val| {
-                    attr_val
-                        .param_map
-                        .as_ref()
-                        .map(|param_map| KeysIter(param_map.0.keys()))
-                })
-            })
-            .flatten()
-            .flatten()
+        let section_map = self.get_section(section_name)?;
+        let attr_val = section_map.get_attr(attr_name)?;
+        let param_map = attr_val.param_map.as_ref()?;
+        Some(KeysIter(param_map.0.keys()))
     }
 }
 
