@@ -32,6 +32,7 @@
 
 mod debug;
 pub mod errors;
+mod internal;
 mod parser;
 
 pub use crate::parser::parse_entry;
@@ -44,136 +45,8 @@ use std::{
     marker::PhantomPinned, mem::transmute, path::Path, pin::Pin, ptr::NonNull,
 };
 
-pub struct AttrValue {
-    value: Option<SP>,
-    param_map: Option<HashMap<SP, SP>>,
-}
-
-/// <section, <attribute, {value, <param, param_vale>}>>
-type InternalMap = HashMap<SP, HashMap<SP, AttrValue>>;
-
-struct Internal {
-    map: Option<InternalMap>,
-    data: Vec<u8>,
-    _pin: PhantomPinned,
-}
-
-impl Internal {
-    fn new(data: Vec<u8>) -> Result<Pin<Box<Self>>, ParseError> {
-        let this = Self {
-            map: None,
-            data,
-            _pin: PhantomPinned,
-        };
-        let mut boxed = Box::pin(this);
-
-        let entry_bytes =
-            parse_entry(&boxed.data).collect::<Result<Vec<_>, _>>()?;
-
-        let mut sections: InternalMap = HashMap::new();
-
-        for section_bytes in entry_bytes {
-            let section = parse_str(section_bytes.title)?;
-            let mut map: HashMap<SP, AttrValue> = HashMap::new();
-            for attr_bytes in section_bytes.attrs {
-                let value = parse_str(attr_bytes.value)?;
-
-                match attr_bytes.param {
-                    Some(param) => {
-                        let name = parse_str(param.attr_name)?;
-                        let param = parse_str(param.param)?;
-                        map.entry(SP::from(name))
-                            .and_modify(|attr| {
-                                attr.param_map
-                                    .get_or_insert_with(HashMap::new)
-                                    .insert(SP::from(param), SP::from(value));
-                            })
-                            .or_insert(AttrValue {
-                                value: None,
-                                param_map: {
-                                    let mut map = HashMap::new();
-                                    map.insert(
-                                        SP::from(param),
-                                        SP::from(value),
-                                    );
-                                    Some(map)
-                                },
-                            });
-                    }
-                    None => {
-                        let name = parse_str(attr_bytes.name)?;
-                        map.entry(SP::from(name))
-                            .and_modify(|attr| {
-                                attr.value = Some(SP::from(value))
-                            })
-                            .or_insert(AttrValue {
-                                value: Some(SP::from(value)),
-                                param_map: None,
-                            });
-                    }
-                }
-            }
-            sections.insert(SP::from(section), map);
-        }
-        // SAFETY: we know this is safe because modifying a field doesn't move the whole struct
-        unsafe {
-            let mut_ref: Pin<&mut Internal> = Pin::as_mut(&mut boxed);
-            Pin::get_unchecked_mut(mut_ref).map = Some(sections);
-        }
-        Ok(boxed)
-    }
-
-    fn get<'a>(
-        self: &'a Pin<Box<Self>>,
-        section: &str,
-        name: &str,
-        param: Option<&str>,
-    ) -> Option<&'a str> {
-        self.map
-            .as_ref()
-            .unwrap()
-            .get(&SP::from(section))
-            .map(|map| {
-                map.get(&SP::from(name)).map(|attr| match param {
-                    Some(param_name) => match &attr.param_map {
-                        Some(map) => map.get(&SP::from(param_name)),
-                        None => None,
-                    },
-                    None => attr.value.as_ref(),
-                })
-            })
-            .flatten()
-            .flatten()
-            // SAFETY: This is safe because the string does live as long as the struct
-            .map(|s| unsafe { transmute(s.0.as_ptr()) })
-    }
-}
-
-/// str pointer
-#[derive(Eq)]
-struct SP(NonNull<str>);
-
-impl SP {
-    fn from(s: &str) -> Self {
-        SP(NonNull::from(s))
-    }
-}
-
-impl PartialEq for SP {
-    fn eq(&self, other: &Self) -> bool {
-        // SAFETY: This is safe because both references are dropped at the end
-        // of the fn
-        unsafe { *self.0.as_ref() == *other.0.as_ref() }
-    }
-}
-
-impl Hash for SP {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // SAFETY: This is safe because the reference is dropped at the end
-        // of the fn
-        unsafe { self.0.as_ref().hash(state) }
-    }
-}
+use internal::{Internal, SectionNamesIter};
+use std::collections::hash_map::{Iter as HMIter, Keys};
 
 pub struct Entry(Pin<Box<Internal>>);
 
@@ -189,28 +62,52 @@ impl Entry {
         Self::parse(buf)
     }
 
-    pub fn section<'a, T: AsRef<str>>(&'a self, name: T) -> SectionSelector<T> {
-        SectionSelector {
+    pub fn has_section(name: impl AsRef<str>) -> bool {
+        todo!()
+    }
+
+    pub fn section<'a, T: AsRef<str>>(&'a self, name: T) -> AttrSelector<T> {
+        AttrSelector {
             name: name,
             entry: self,
         }
     }
 
-    // pub fn sections(&self) -> SectionMap {
-    //     self.0.
-    // }
+    pub fn sections(&self) -> SectionIter {
+        SectionIter {
+            iter: self.0.section_names_iter(),
+            entry: self,
+        }
+    }
 }
 
-// pub struct Section<'a>(&'a SectionMap);
+pub struct SectionIter<'a> {
+    iter: SectionNamesIter<'a>,
+    entry: &'a Entry,
+}
 
-pub struct SectionSelector<'a, T> {
+impl<'a> Iterator for SectionIter<'a> {
+    type Item = AttrSelector<'a, &'a str>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|name| AttrSelector {
+            name,
+            entry: self.entry,
+        })
+    }
+}
+
+pub struct AttrSelector<'a, T: AsRef<str>> {
     name: T,
     entry: &'a Entry,
 }
 
-impl<'a, T: AsRef<str>> SectionSelector<'a, T> {
+impl<'a, T: AsRef<str>> AttrSelector<'a, T> {
     pub fn attr(&self, name: impl AsRef<str>) -> Option<&'a str> {
         self.entry.0.get(self.name.as_ref(), name.as_ref(), None)
+    }
+
+    pub fn has_attr(&self, name: impl AsRef<str>) -> bool {
+        todo!()
     }
 
     pub fn attr_with_param(
@@ -222,6 +119,10 @@ impl<'a, T: AsRef<str>> SectionSelector<'a, T> {
         self.entry
             .0
             .get(section, name.as_ref(), Some(param_val.as_ref()))
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.as_ref()
     }
 
     // pub fn attrs(&self) -> Option<Vec<Attr<'a>>> {
@@ -243,18 +144,6 @@ impl<'a, T: AsRef<str>> SectionSelector<'a, T> {
     // }
 }
 
-pub struct AttrSelector<'a, T> {
-    entry: &'a Entry,
-    name: T,
-}
-
-pub fn parse_str(input: &[u8]) -> Result<&str, ParseError> {
-    std::str::from_utf8(input).map_err(|e| ParseError::Utf8Error {
-        bytes: input.to_owned(),
-        source: e,
-    })
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -271,11 +160,16 @@ mod test {
     #[test]
     fn drop() {
         let entry = Entry::parse_file("./test_data/sshd.service").unwrap();
-        // let desc = entry.get("Unit", "Description", None);
-        let desc = entry.section("Unit").attr("Description");
-        println!("{:?}", desc);
-        println!("{:?}", desc);
+        let mut iter = entry.sections();
+        let first = iter.next().unwrap();
+        let name = first.name();
         std::mem::drop(entry);
+        // println!("{}", name);
+        // let desc = entry.get("Unit", "Description", None);
+        // let desc = entry.section("Unit").attr("Description");
+        // println!("{:?}", desc);
+        // println!("{:?}", desc);
+        // std::mem::drop(entry);
         // println!("{:?}", desc);
     }
 }
