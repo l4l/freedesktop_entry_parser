@@ -42,7 +42,7 @@ pub use errors::ParseError;
 
 use std::{fs::File, io::Read, path::Path, pin::Pin};
 
-use internal::{Internal, SectionNamesIter};
+use internal::{AttrNamesIter, Internal, SectionNamesIter};
 
 pub struct Entry(Pin<Box<Internal>>);
 
@@ -120,6 +120,27 @@ impl<'a, T: AsRef<str>> AttrSelector<'a, T> {
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
+
+    pub fn attrs(&'a self) -> Option<AttrIter<'a>> {
+        Some(AttrIter {
+            section_name: self.name.as_ref(),
+            iter: self.entry.0.attr_names_iter(self.name.as_ref())?,
+            entry: &self.entry,
+        })
+    }
+}
+
+pub struct AttrIter<'a> {
+    section_name: &'a str,
+    iter: AttrNamesIter<'a>,
+    entry: &'a Entry,
+}
+
+impl<'a> Iterator for AttrIter<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.entry.0.get(self.section_name, self.iter.next()?, None)
+    }
 }
 
 #[cfg(test)]
@@ -138,9 +159,9 @@ mod test {
     #[test]
     fn drop() {
         let entry = Entry::parse_file("./test_data/sshd.service").unwrap();
-        let mut iter = entry.sections();
-        let first = iter.next().unwrap();
-        let name = first.name();
+        // let mut iter = entry.sections();
+        // let first = iter.next().unwrap();
+        // let name = first.name();
         std::mem::drop(entry);
         // println!("{}", name);
         // let desc = entry.get("Unit", "Description", None);
