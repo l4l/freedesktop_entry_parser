@@ -42,19 +42,87 @@ pub use errors::ParseError;
 use std::{
     collections::HashMap, fs::File, hash::Hash, io::Read,
     marker::PhantomPinned, mem::transmute, path::Path, pin::Pin, ptr::NonNull,
-    rc::Rc,
 };
 
-type SectionMap = HashMap<(SP, Option<SP>), SP>;
+pub struct AttrValue {
+    value: Option<SP>,
+    param_map: Option<HashMap<SP, SP>>,
+}
+
+/// <section, <attribute, {value, <param, param_vale>}>>
+type InternalMap = HashMap<SP, HashMap<SP, AttrValue>>;
 
 struct Internal {
-    /// Section, attribute, param, value
-    map: Option<HashMap<SP, SectionMap>>,
+    map: Option<InternalMap>,
     data: Vec<u8>,
     _pin: PhantomPinned,
 }
 
 impl Internal {
+    fn new(data: Vec<u8>) -> Result<Pin<Box<Self>>, ParseError> {
+        let this = Self {
+            map: None,
+            data,
+            _pin: PhantomPinned,
+        };
+        let mut boxed = Box::pin(this);
+
+        let entry_bytes =
+            parse_entry(&boxed.data).collect::<Result<Vec<_>, _>>()?;
+
+        let mut sections: InternalMap = HashMap::new();
+
+        for section_bytes in entry_bytes {
+            let section = parse_str(section_bytes.title)?;
+            let mut map: HashMap<SP, AttrValue> = HashMap::new();
+            for attr_bytes in section_bytes.attrs {
+                let value = parse_str(attr_bytes.value)?;
+
+                match attr_bytes.param {
+                    Some(param) => {
+                        let name = parse_str(param.attr_name)?;
+                        let param = parse_str(param.param)?;
+                        map.entry(SP::from(name))
+                            .and_modify(|attr| {
+                                attr.param_map
+                                    .get_or_insert_with(HashMap::new)
+                                    .insert(SP::from(param), SP::from(value));
+                            })
+                            .or_insert(AttrValue {
+                                value: None,
+                                param_map: {
+                                    let mut map = HashMap::new();
+                                    map.insert(
+                                        SP::from(param),
+                                        SP::from(value),
+                                    );
+                                    Some(map)
+                                },
+                            });
+                    }
+                    None => {
+                        let name = parse_str(attr_bytes.name)?;
+                        map.entry(SP::from(name))
+                            .and_modify(|attr| {
+                                attr.value = Some(SP::from(value))
+                            })
+                            .or_insert(AttrValue {
+                                value: Some(SP::from(value)),
+                                param_map: None,
+                            });
+                    }
+                }
+            }
+            sections.insert(SP::from(section), map);
+        }
+        // SAFETY: we know this is safe because modifying a field doesn't move the whole struct
+        unsafe {
+            let mut_ref: Pin<&mut Internal> = Pin::as_mut(&mut boxed);
+            Pin::get_unchecked_mut(mut_ref).map = Some(sections);
+        }
+        Ok(boxed)
+    }
+
     fn get<'a>(
         self: &'a Pin<Box<Self>>,
         section: &str,
@@ -66,11 +134,18 @@ impl Internal {
             .unwrap()
             .get(&SP::from(section))
             .map(|map| {
-                map.get(&(SP::from(name), param.map(|v| SP::from(v))))
-                    // SAFETY: This is safe because the string does live as long as the struct
-                    .map(|v| unsafe { transmute(v.0.as_ptr()) })
+                map.get(&SP::from(name)).map(|attr| match param {
+                    Some(param_name) => match &attr.param_map {
+                        Some(map) => map.get(&SP::from(param_name)),
+                        None => None,
+                    },
+                    None => attr.value.as_ref(),
+                })
             })
             .flatten()
+            .flatten()
+            // SAFETY: This is safe because the string does live as long as the struct
+            .map(|s| unsafe { transmute(s.0.as_ptr()) })
     }
 }
 
@@ -104,47 +179,7 @@ pub struct Entry(Pin<Box<Internal>>);
 
 impl Entry {
     pub fn parse(input: impl Into<Vec<u8>>) -> Result<Self, ParseError> {
-        let this = Internal {
-            map: None,
-            data: input.into(),
-            _pin: PhantomPinned,
-        };
-        let mut boxed = Box::pin(this);
-
-        let entry_bytes =
-            parse_entry(&boxed.data).collect::<Result<Vec<_>, _>>()?;
-
-        let mut sections = HashMap::new();
-
-        for section_bytes in entry_bytes {
-            let section = parse_str(section_bytes.title)?;
-            let mut map = HashMap::new();
-            for attr_bytes in section_bytes.attrs {
-                let value = parse_str(attr_bytes.value)?;
-
-                match attr_bytes.param {
-                    Some(param) => {
-                        let name = parse_str(param.attr_name)?;
-                        let param = parse_str(param.param)?;
-                        map.insert(
-                            (SP::from(name), Some(SP::from(param))),
-                            SP::from(value),
-                        );
-                    }
-                    None => {
-                        let name = parse_str(attr_bytes.name)?;
-                        map.insert((SP::from(name), None), SP::from(value));
-                    }
-                }
-            }
-            sections.insert(SP::from(section), map);
-        }
-        // SAFETY: we know this is safe because modifying a field doesn't move the whole struct
-        unsafe {
-            let mut_ref: Pin<&mut Internal> = Pin::as_mut(&mut boxed);
-            Pin::get_unchecked_mut(mut_ref).map = Some(sections);
-        }
-        Ok(Entry(boxed))
+        Ok(Entry(Internal::new(input.into())?))
     }
 
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self, ParseError> {
@@ -166,13 +201,7 @@ impl Entry {
     // }
 }
 
-pub struct Section<'a>(&'a SectionMap);
-
-#[derive(Debug)]
-pub struct Attr<'a> {
-    pub key: &'a str,
-    pub value: &'a str,
-}
+// pub struct Section<'a>(&'a SectionMap);
 
 pub struct SectionSelector<'a, T> {
     name: T,
@@ -195,23 +224,28 @@ impl<'a, T: AsRef<str>> SectionSelector<'a, T> {
             .get(section, name.as_ref(), Some(param_val.as_ref()))
     }
 
-    pub fn attrs(&self) -> Option<Vec<Attr<'a>>> {
-        self.entry
-            .0
-            .map
-            .as_ref()
-            .unwrap()
-            .get(&SP::from(self.name.as_ref()))
-            .map(|section| {
-                section
-                    .iter()
-                    .map(|((name, _), value)| Attr {
-                        key: unsafe { transmute(name.0.as_ptr()) },
-                        value: unsafe { transmute(value.0.as_ptr()) },
-                    })
-                    .collect()
-            })
-    }
+    // pub fn attrs(&self) -> Option<Vec<Attr<'a>>> {
+    //     self.entry
+    //         .0
+    //         .map
+    //         .as_ref()
+    //         .unwrap()
+    //         .get(&SP::from(self.name.as_ref()))
+    //         .map(|section| {
+    //             section
+    //                 .iter()
+    //                 .map(|((name, _), value)| Attr {
+    //                     key: unsafe { transmute(name.0.as_ptr()) },
+    //                     value: unsafe { transmute(value.0.as_ptr()) },
+    //                 })
+    //                 .collect()
+    //         })
+    // }
+}
+
+pub struct AttrSelector<'a, T> {
+    entry: &'a Entry,
+    name: T,
 }
 
 pub fn parse_str(input: &[u8]) -> Result<&str, ParseError> {
