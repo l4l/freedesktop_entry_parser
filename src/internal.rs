@@ -11,11 +11,14 @@ use std::{
 
 pub struct AttrValue {
     value: Option<SP>,
-    param_map: Option<HashMap<SP, SP>>,
+    param_map: Option<ParamMap>,
 }
 
 /// <section, <attribute, {value, <param, param_vale>}>>
-type InternalMap = HashMap<SP, HashMap<SP, AttrValue>>;
+type InternalMap = HashMap<SP, AttrMap>;
+
+pub(crate) struct AttrMap(HashMap<SP, AttrValue>);
+pub(crate) struct ParamMap(HashMap<SP, SP>);
 
 pub(crate) struct Internal {
     map: Option<InternalMap>,
@@ -50,7 +53,8 @@ impl Internal {
                         map.entry(SP::from(name))
                             .and_modify(|attr| {
                                 attr.param_map
-                                    .get_or_insert_with(HashMap::new)
+                                    .get_or_insert_with(ParamMap::new)
+                                    .0
                                     .insert(SP::from(param), SP::from(value));
                             })
                             .or_insert(AttrValue {
@@ -61,7 +65,7 @@ impl Internal {
                                         SP::from(param),
                                         SP::from(value),
                                     );
-                                    Some(map)
+                                    Some(ParamMap(map))
                                 },
                             });
                     }
@@ -78,7 +82,7 @@ impl Internal {
                     }
                 }
             }
-            sections.insert(SP::from(section), map);
+            sections.insert(SP::from(section), AttrMap(map));
         }
         // SAFETY: we know this is safe because modifying a field doesn't move the whole struct
         unsafe {
@@ -88,65 +92,98 @@ impl Internal {
         Ok(boxed)
     }
 
+    fn get_section<'a>(
+        self: &'a Pin<Box<Self>>,
+        section_name: &str,
+    ) -> Option<&'a AttrMap> {
+        self.map.as_ref().unwrap().get(&SP::from(section_name))
+    }
+
     pub(crate) fn get<'a>(
         self: &'a Pin<Box<Self>>,
         section_name: &str,
         attr_name: &str,
         param_name: Option<&str>,
     ) -> Option<&'a str> {
-        self.map
-            .as_ref()
-            .unwrap()
-            .get(&SP::from(section_name))
-            .map(|map| {
-                map.get(&SP::from(attr_name)).map(|attr| match param_name {
-                    Some(param_name) => match &attr.param_map {
-                        Some(map) => map.get(&SP::from(param_name)),
-                        None => None,
-                    },
-                    None => attr.value.as_ref(),
-                })
+        self.get_section(section_name)
+            .map(|attr_map| {
+                attr_map
+                    .get_attr(attr_name)
+                    .map(|attr_val| match param_name {
+                        Some(param_name) => attr_val
+                            .param_map
+                            .as_ref()
+                            .map(|param_map| param_map.get_param(param_name))
+                            .flatten(),
+                        None => attr_val.get_value(),
+                    })
             })
             .flatten()
             .flatten()
-            // SAFETY: This is safe because the string does live as long as the struct
-            .map(|s| unsafe { transmute(s.0.as_ptr()) })
     }
 
-    pub(crate) fn section_names_iter<'a>(&'a self) -> SectionNamesIter<'a> {
+    pub(crate) fn section_names_iter<'a>(
+        self: &'a Pin<Box<Self>>,
+    ) -> SectionNamesIter<'a> {
         KeysIter(self.map.as_ref().unwrap().keys())
     }
 
     pub(crate) fn attr_names_iter<'a>(
-        &'a self,
+        self: &'a Pin<Box<Self>>,
         section_name: &str,
     ) -> Option<AttrNamesIter<'a>> {
-        self.map
-            .as_ref()
-            .unwrap()
-            .get(&SP::from(section_name))
-            .map(|map| KeysIter(map.keys()))
+        self.get_section(section_name)
+            .map(|attr_map| KeysIter(attr_map.0.keys()))
     }
 
     pub(crate) fn param_names_iter<'a>(
-        &'a self,
+        self: &'a Pin<Box<Self>>,
         section_name: &str,
         attr_name: &str,
     ) -> Option<ParamNamesIter<'a>> {
-        self.map
-            .as_ref()
-            .unwrap()
-            .get(&SP::from(section_name))
-            .map(|map| {
-                map.get(&SP::from(attr_name)).map(|attr| {
-                    match &attr.param_map {
-                        Some(map) => Some(KeysIter(map.keys())),
-                        None => None,
-                    }
+        self.get_section(section_name)
+            .map(|attr_map| {
+                attr_map.get_attr(attr_name).map(|attr_val| {
+                    attr_val
+                        .param_map
+                        .as_ref()
+                        .map(|param_map| KeysIter(param_map.0.keys()))
                 })
             })
             .flatten()
             .flatten()
+    }
+}
+
+impl AttrMap {
+    fn get_attr(&self, attr_name: &str) -> Option<&AttrValue> {
+        self.0.get(&SP::from(attr_name))
+    }
+}
+
+impl AttrValue {
+    fn get_value<'a>(&'a self) -> Option<&'a str> {
+        // SAFETY: This is safe because the string has the same lifetime as Entry
+        self.value
+            .as_ref()
+            .map(|s| unsafe { transmute(s.0.as_ptr()) })
+    }
+
+    fn get_params(&self) -> Option<&ParamMap> {
+        self.param_map.as_ref()
+    }
+}
+
+impl ParamMap {
+    fn new() -> ParamMap {
+        ParamMap(HashMap::new())
+    }
+
+    fn get_param<'a>(&'a self, param_name: &str) -> Option<&'a str> {
+        self.0
+            .get(&SP::from(param_name))
+            // SAFETY: This is safe because the string has the same lifetime as Entry
+            .map(|s| unsafe { transmute(s.0.as_ptr()) })
     }
 }
 
@@ -159,7 +196,7 @@ impl<'a, T> Iterator for KeysIter<'a, T> {
     }
 }
 
-pub(crate) type SectionNamesIter<'a> = KeysIter<'a, HashMap<SP, AttrValue>>;
+pub(crate) type SectionNamesIter<'a> = KeysIter<'a, AttrMap>;
 pub(crate) type AttrNamesIter<'a> = KeysIter<'a, AttrValue>;
 pub(crate) type ParamNamesIter<'a> = KeysIter<'a, SP>;
 

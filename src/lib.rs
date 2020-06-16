@@ -40,13 +40,9 @@ pub use crate::parser::AttrBytes;
 pub use crate::parser::SectionBytes;
 pub use errors::ParseError;
 
-use std::{
-    collections::HashMap, fs::File, hash::Hash, io::Read,
-    marker::PhantomPinned, mem::transmute, path::Path, pin::Pin, ptr::NonNull,
-};
+use std::{fs::File, io::Read, path::Path, pin::Pin};
 
 use internal::{Internal, SectionNamesIter};
-use std::collections::hash_map::{Iter as HMIter, Keys};
 
 pub struct Entry(Pin<Box<Internal>>);
 
@@ -124,24 +120,6 @@ impl<'a, T: AsRef<str>> AttrSelector<'a, T> {
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
-
-    // pub fn attrs(&self) -> Option<Vec<Attr<'a>>> {
-    //     self.entry
-    //         .0
-    //         .map
-    //         .as_ref()
-    //         .unwrap()
-    //         .get(&SP::from(self.name.as_ref()))
-    //         .map(|section| {
-    //             section
-    //                 .iter()
-    //                 .map(|((name, _), value)| Attr {
-    //                     key: unsafe { transmute(name.0.as_ptr()) },
-    //                     value: unsafe { transmute(value.0.as_ptr()) },
-    //                 })
-    //                 .collect()
-    //         })
-    // }
 }
 
 #[cfg(test)]
