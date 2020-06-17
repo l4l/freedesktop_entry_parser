@@ -2,13 +2,98 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-//! A library for parsing FreeDesktop entry files.
-//! These files are used in the
-//! [Desktop Entry files](https://specifications.freedesktop.org/desktop-entry-spec/desktop-entry-spec-latest.html),
-//! [Icon Theme index files](https://specifications.freedesktop.org/icon-theme-spec/icon-theme-spec-latest.html),
-//! and [Systemd unit files](https://www.freedesktop.org/software/systemd/man/systemd.unit.html).
-//! They are similar to ini files but are distinct enough that
-//! an ini parse would not work.
+//! A library for parsing FreeDesktop entry files. These files are used in the
+//! [Desktop Entry
+//! files](https://specifications.freedesktop.org/desktop-entry-spec/desktop-entry-spec-latest.html),
+//! [Icon Theme index
+//! files](https://specifications.freedesktop.org/icon-theme-spec/icon-theme-spec-latest.html),
+//! and [Systemd unit
+//! files](https://www.freedesktop.org/software/systemd/man/systemd.unit.html).
+//! They are similar to ini files but are distinct enough that an ini parse
+//! would not work.
+//!
+//! # Struct of Freedesktop Entry Files
+//!
+//! Freedesktop entry files are split up into section, each with a header in the
+//! form `[NAME]`. Each section has attributes, which are key value pairs,
+//! separated by and `=`.  Some attributes have parameters.  These are values
+//! between `[]` and the end of the attribute name.  These are often use for
+//! localization.
+//!
+//! Here is a snippet from `firefox.desktop`
+//!
+//! ```
+//! [Desktop Entry]
+//! Version=1.0
+//! Name=Firefox
+//! GenericName=Web Browser
+//! GenericName[ar]=متصفح ويب
+//! GenericName[ast]=Restolador Web
+//! GenericName[bn]=ওয়েব ব্রাউজার
+//! GenericName[ca]=Navegador web
+//! Exec=/usr/lib/firefox/firefox %u
+//! Icon=firefox
+//!
+//! [Desktop Action new-window]
+//! Name=New Window
+//! Name[ach]=Dirica manyen
+//! Name[af]=Nuwe venster
+//! Name[an]=Nueva finestra
+//! Exec=/usr/lib/firefox/firefox --new-window %u
+//! ```
+//!
+//! The first section is called `Desktop Entry`.  Is has many attributes
+//! including `Name` which is `Firefox`.  The `GenericName` attributes has a
+//! param. The default value is in English but there are also values with a
+//! parameter for different locales.
+//!
+//! # APIs
+//!
+//! This library has two APIs, a high level api and a lower level byte oriented
+//! api. The main entry point for the high level API is
+//! [`Entry`](struct.Entry.html) and the entry point for the lower level API is
+//! the [`parse_entry`](fn.parse_entry.html) function.
+//!
+//! # High Level API
+//!
+//! As example input lets use the contents of `sshd.service`
+//! ```
+//! [Unit]
+//! Description=OpenSSH Daemon
+//! Wants=sshdgenkeys.service
+//! After=sshdgenkeys.service
+//! After=network.target
+//!
+//! [Service]
+//! ExecStart=/usr/bin/sshd -D
+//! ExecReload=/bin/kill -HUP $MAINPID
+//! KillMode=process
+//! Restart=always
+//!
+//! [Install]
+//! WantedBy=multi-user.target
+//! ```
+//!
+//! For example, to print the start command we could do this:
+//! ```
+//! use freedesktop_entry_parser::Entry;
+//!
+//! let entry = Entry::parse_file("./test_data/sshd.service")?;
+//! let start_cmd = entry
+//!     .section("Service")
+//!     .attr("ExecStart")
+//!     .expect("Attribute doesn't exist");
+//! println!("{}", start_cmd);
+//!
+//! # Ok::<(), freedesktop_entry_parser::ParseError>(())
+//! ```
+//! There are more examples in the [`examples`]() directory.
+//!
+//! # Lower Level API
+//!
+//! The lower level api is byte oriented and simply provides an iterator over
+//! the sections in the file as they appear. This API is faster and may be more
+//! suitable in certain circumstances.
 //!
 //! Example:
 //! ```
@@ -37,6 +122,7 @@ mod parser;
 
 pub use crate::parser::parse_entry;
 pub use crate::parser::AttrBytes;
+pub use crate::parser::EntryIter;
 pub use crate::parser::SectionBytes;
 pub use errors::ParseError;
 use internal::{
@@ -46,6 +132,7 @@ use internal::{
 
 use std::{fs::File, io::Read, path::Path, pin::Pin};
 
+/// Parse a Freedesktop entry
 pub struct Entry(Pin<Box<Internal>>);
 
 impl Entry {
@@ -79,6 +166,10 @@ impl Entry {
     }
 }
 
+/// Iterate over the sections in an entry.
+///
+/// Created from [`Entry::sections`](struct.Entry.html#method.sections)
+/// Outputs [`AttrSelector`](struct.AttrSelector.html)
 pub struct SectionIter<'a> {
     iter: SectionNamesIter<'a>,
     entry: &'a Entry,
@@ -94,6 +185,10 @@ impl<'a> Iterator for SectionIter<'a> {
     }
 }
 
+/// Get attributes and their values from a given section.
+///
+/// Created from [`Entry::section`](struct.Entry.html#method.section) or
+/// [`SectionIter`](struct.SectionIter.html)
 pub struct AttrSelector<'a, T: AsRef<str>> {
     name: T,
     entry: &'a Entry,
@@ -135,9 +230,17 @@ impl<'a, T: AsRef<str>> AttrSelector<'a, T> {
     }
 }
 
+/// A single attribute and it's value. Can also get attribute params is they
+/// exist.
+///
+/// The value param is an `Option` because this attribute without a param may
+/// not have a value.
 pub struct Attr<'a> {
+    /// Name of the section the attribute is from
     pub section_name: &'a str,
+    /// Name of the attribute
     pub name: &'a str,
+    /// Value of the attribute if it exists.
     pub value: Option<&'a str>,
     attr: &'a AttrValue,
     entry: &'a Entry,
