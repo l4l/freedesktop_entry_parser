@@ -116,6 +116,22 @@ impl Internal {
         }
     }
 
+    pub(crate) fn get_attr<'a>(
+        self: &'a Pin<Box<Self>>,
+        section_name: &str,
+        attr_name: &str,
+    ) -> Option<&'a AttrValue> {
+        let section_map = self.get_section(section_name)?;
+        section_map.get_attr(attr_name)
+    }
+
+    pub(crate) fn has_section(
+        self: &Pin<Box<Self>>,
+        section_name: &str,
+    ) -> bool {
+        self.get_section(section_name).is_some()
+    }
+
     pub(crate) fn section_names_iter<'a>(
         self: &'a Pin<Box<Self>>,
     ) -> SectionNamesIter<'a> {
@@ -126,8 +142,7 @@ impl Internal {
         self: &'a Pin<Box<Self>>,
         section_name: &str,
     ) -> Option<AttrNamesIter<'a>> {
-        self.get_section(section_name)
-            .map(|attr_map| KeysIter(attr_map.0.keys()))
+        Some(KeysIter(self.get_section(section_name)?.0.keys()))
     }
 
     pub(crate) fn param_names_iter<'a>(
@@ -143,20 +158,20 @@ impl Internal {
 }
 
 impl AttrMap {
-    fn get_attr(&self, attr_name: &str) -> Option<&AttrValue> {
+    pub(crate) fn get_attr(&self, attr_name: &str) -> Option<&AttrValue> {
         self.0.get(&SP::from(attr_name))
     }
 }
 
 impl AttrValue {
-    fn get_value<'a>(&'a self) -> Option<&'a str> {
+    pub(crate) fn get_value<'a>(&'a self) -> Option<&'a str> {
         // SAFETY: This is safe because the string has the same lifetime as Entry
         self.value
             .as_ref()
             .map(|s| unsafe { transmute(s.0.as_ptr()) })
     }
 
-    fn get_params(&self) -> Option<&ParamMap> {
+    pub(crate) fn get_params(&self) -> Option<&ParamMap> {
         self.param_map.as_ref()
     }
 }
@@ -166,9 +181,9 @@ impl ParamMap {
         ParamMap(HashMap::new())
     }
 
-    fn get_param<'a>(&'a self, param_name: &str) -> Option<&'a str> {
+    pub(crate) fn get_param<'a>(&'a self, param_val: &str) -> Option<&'a str> {
         self.0
-            .get(&SP::from(param_name))
+            .get(&SP::from(param_val))
             // SAFETY: This is safe because the string has the same lifetime as Entry
             .map(|s| unsafe { transmute(s.0.as_ptr()) })
     }

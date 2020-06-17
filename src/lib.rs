@@ -39,10 +39,12 @@ pub use crate::parser::parse_entry;
 pub use crate::parser::AttrBytes;
 pub use crate::parser::SectionBytes;
 pub use errors::ParseError;
+use internal::{
+    AttrNamesIter, AttrValue, Internal, ParamMap, ParamNamesIter,
+    SectionNamesIter,
+};
 
 use std::{fs::File, io::Read, path::Path, pin::Pin};
-
-use internal::{AttrNamesIter, Internal, SectionNamesIter};
 
 pub struct Entry(Pin<Box<Internal>>);
 
@@ -58,8 +60,8 @@ impl Entry {
         Self::parse(buf)
     }
 
-    pub fn has_section(name: impl AsRef<str>) -> bool {
-        todo!()
+    pub fn has_section(&self, name: impl AsRef<str>) -> bool {
+        self.0.has_section(name.as_ref())
     }
 
     pub fn section<'a, T: AsRef<str>>(&'a self, name: T) -> AttrSelector<T> {
@@ -103,7 +105,10 @@ impl<'a, T: AsRef<str>> AttrSelector<'a, T> {
     }
 
     pub fn has_attr(&self, name: impl AsRef<str>) -> bool {
-        todo!()
+        self.entry
+            .0
+            .get_attr(self.name.as_ref(), name.as_ref())
+            .is_some()
     }
 
     pub fn attr_with_param(
@@ -130,6 +135,36 @@ impl<'a, T: AsRef<str>> AttrSelector<'a, T> {
     }
 }
 
+pub struct Attr<'a> {
+    pub section_name: &'a str,
+    pub name: &'a str,
+    pub value: Option<&'a str>,
+    attr: &'a AttrValue,
+    entry: &'a Entry,
+}
+
+impl<'a> Attr<'a> {
+    pub fn has_value(&self) -> bool {
+        self.attr.get_value().is_some()
+    }
+
+    pub fn has_params(&self) -> bool {
+        self.attr.get_params().is_some()
+    }
+
+    pub fn params(&self) -> Option<ParamIter<'a>> {
+        Some(ParamIter {
+            section_name: self.section_name,
+            attr_name: self.name,
+            iter: self
+                .entry
+                .0
+                .param_names_iter(self.section_name, self.name)?,
+            params: self.attr.get_params()?,
+        })
+    }
+}
+
 pub struct AttrIter<'a> {
     section_name: &'a str,
     iter: AttrNamesIter<'a>,
@@ -137,9 +172,45 @@ pub struct AttrIter<'a> {
 }
 
 impl<'a> Iterator for AttrIter<'a> {
-    type Item = &'a str;
+    type Item = Attr<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.entry.0.get(self.section_name, self.iter.next()?, None)
+        let attr_name = self.iter.next()?;
+        let attr = self.entry.0.get_attr(self.section_name, attr_name)?;
+        Some(Attr {
+            attr,
+            name: attr_name,
+            section_name: self.section_name,
+            entry: self.entry,
+            value: attr.get_value(),
+        })
+    }
+}
+
+pub struct AttrParam<'a> {
+    pub section_name: &'a str,
+    pub attr_name: &'a str,
+    pub param_val: &'a str,
+    pub value: &'a str,
+}
+
+pub struct ParamIter<'a> {
+    section_name: &'a str,
+    attr_name: &'a str,
+    iter: ParamNamesIter<'a>,
+    params: &'a ParamMap,
+}
+
+impl<'a> Iterator for ParamIter<'a> {
+    type Item = AttrParam<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let param_val = self.iter.next()?;
+        let value = self.params.get_param(param_val)?;
+        Some(AttrParam {
+            section_name: self.section_name,
+            attr_name: self.attr_name,
+            param_val,
+            value,
+        })
     }
 }
 
