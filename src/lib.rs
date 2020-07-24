@@ -54,7 +54,7 @@
 //! [`Entry`](struct.Entry.html) and the entry point for the lower level API is
 //! the [`parse_entry`](fn.parse_entry.html) function.
 //!
-//! # High Level API
+//! ## High Level API
 //!
 //! As example input lets use the contents of `sshd.service`
 //! ```ignore
@@ -89,7 +89,7 @@
 //! ```
 //! There are more examples in the [`examples`]() directory.
 //!
-//! # Lower Level API
+//! ## Lower Level API
 //!
 //! The lower level api is byte oriented and simply provides an iterator over
 //! the sections in the file as they appear. This API is faster and may be more
