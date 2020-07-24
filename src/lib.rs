@@ -22,7 +22,7 @@
 //!
 //! Here is a snippet from `firefox.desktop`
 //!
-//! ```
+//! ```ignore
 //! [Desktop Entry]
 //! Version=1.0
 //! Name=Firefox
@@ -57,7 +57,7 @@
 //! # High Level API
 //!
 //! As example input lets use the contents of `sshd.service`
-//! ```
+//! ```ignore
 //! [Unit]
 //! Description=OpenSSH Daemon
 //! Wants=sshdgenkeys.service
@@ -153,7 +153,7 @@ impl Entry {
 
     pub fn section<'a, T: AsRef<str>>(&'a self, name: T) -> AttrSelector<T> {
         AttrSelector {
-            name: name,
+            name,
             entry: self,
         }
     }
@@ -268,6 +268,7 @@ impl<'a> Attr<'a> {
     }
 }
 
+/// Iterates over attributes in a section
 pub struct AttrIter<'a> {
     section_name: &'a str,
     iter: AttrNamesIter<'a>,
