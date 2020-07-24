@@ -131,7 +131,7 @@ pub mod low_level {
     pub use crate::parser::EntryIter;
     pub use crate::parser::SectionBytes;
 }
-pub use errors::ParseError;
+pub use errors::{Result, ParseError};
 use internal::{
     AttrNamesIter, AttrValue, Internal, ParamMap, ParamNamesIter,
     SectionNamesIter,
@@ -139,7 +139,7 @@ use internal::{
 use std::{fs::File, io::Read, path::Path, pin::Pin};
 
 /// Parse a FreeDesktop entry file.
-pub fn parse_entry(input: impl AsRef<Path>) -> Result<Entry, ParseError> {
+pub fn parse_entry(input: impl AsRef<Path>) -> Result<Entry> {
     Entry::parse_file(input)
 }
 
@@ -148,12 +148,12 @@ pub struct Entry(Pin<Box<Internal>>);
 
 impl Entry {
     /// Parse an entry from byte buffer.
-    pub fn parse(input: impl Into<Vec<u8>>) -> Result<Self, ParseError> {
+    pub fn parse(input: impl Into<Vec<u8>>) -> Result<Self> {
         Ok(Entry(Internal::new(input.into())?))
     }
 
     /// Parse entry from file.
-    pub fn parse_file(path: impl AsRef<Path>) -> Result<Self, ParseError> {
+    pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
         let mut file = File::open(path).unwrap();
         let mut buf = Vec::new();
         file.read_to_end(&mut buf).unwrap();

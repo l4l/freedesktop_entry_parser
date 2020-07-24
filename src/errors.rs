@@ -2,6 +2,8 @@ use nom::error::ErrorKind;
 use std::str::Utf8Error;
 use thiserror::Error;
 
+pub type Result<T>=std::result::Result<T, ParseError>;
+
 /// An error that occurred while parsing. This is the general error type for
 /// this library.
 #[derive(Debug, Error)]
