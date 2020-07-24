@@ -1,3 +1,7 @@
+//! Internal entry map
+//!
+//! The map uses unsafe code and this module provides a safe but
+//! unergonomic API for use by the nicer API.
 use crate::{parser::parse_entry, ParseError};
 use std::{
     collections::{hash_map::Keys, HashMap},

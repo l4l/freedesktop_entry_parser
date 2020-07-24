@@ -76,9 +76,9 @@
 //!
 //! For example, to print the start command we could do this:
 //! ```
-//! use freedesktop_entry_parser::Entry;
+//! use freedesktop_entry_parser::parse_entry;
 //!
-//! let entry = Entry::parse_file("./test_data/sshd.service")?;
+//! let entry = parse_entry("./test_data/sshd.service")?;
 //! let start_cmd = entry
 //!     .section("Service")
 //!     .attr("ExecStart")
@@ -115,9 +115,13 @@
 //! # Ok::<(), freedesktop_entry_parser::ParseError>(())
 //! ```
 
+/// `Debug` trait impls
 mod debug;
+/// Eror types
 pub mod errors;
+/// Entry map inplementaion
 mod internal;
+/// Low level parser
 mod parser;
 
 /// Low level API
@@ -248,13 +252,12 @@ impl<'a, T: AsRef<str>> AttrSelector<'a, T> {
     }
 
     /// Iterator over attributes in this section
-    // TODO remove None
-    pub fn attrs(&'a self) -> Option<AttrIter<'a>> {
-        Some(AttrIter {
+    pub fn attrs(&'a self) -> AttrIter<'a> {
+        AttrIter {
             section_name: self.name.as_ref(),
-            iter: self.entry.0.attr_names_iter(self.name.as_ref())?,
+            iter: self.entry.0.attr_names_iter(self.name.as_ref()),
             entry: &self.entry,
-        })
+        }
     }
 }
 
@@ -286,31 +289,30 @@ impl<'a> Attr<'a> {
     }
 
     /// Iterator over params
-    // TODO remove None
-    pub fn params(&self) -> Option<ParamIter<'a>> {
-        Some(ParamIter {
+    pub fn params(&self) -> ParamIter<'a> {
+        ParamIter {
             section_name: self.section_name,
             attr_name: self.name,
             iter: self
                 .entry
                 .0
-                .param_names_iter(self.section_name, self.name)?,
-            params: self.attr.get_params()?,
-        })
+                .param_names_iter(self.section_name, self.name),
+            params: self.attr.get_params(),
+        }
     }
 }
 
 /// Iterates over attributes in a section
 pub struct AttrIter<'a> {
     section_name: &'a str,
-    iter: AttrNamesIter<'a>,
+    iter: Option<AttrNamesIter<'a>>,
     entry: &'a Entry,
 }
 
 impl<'a> Iterator for AttrIter<'a> {
     type Item = Attr<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        let attr_name = self.iter.next()?;
+        let attr_name = self.iter.as_mut()?.next()?;
         let attr = self.entry.0.get_attr(self.section_name, attr_name)?;
         Some(Attr {
             attr,
@@ -322,25 +324,31 @@ impl<'a> Iterator for AttrIter<'a> {
     }
 }
 
+/// Value of an attribute with a param.
 pub struct AttrParam<'a> {
+    /// Section this param is from
     pub section_name: &'a str,
+    /// Attribute this param is from
     pub attr_name: &'a str,
+    /// Name of the param.
     pub param_val: &'a str,
+    /// Value of the attribute with this param.
     pub value: &'a str,
 }
 
+/// Iterator over an attributes params.
 pub struct ParamIter<'a> {
     section_name: &'a str,
     attr_name: &'a str,
-    iter: ParamNamesIter<'a>,
-    params: &'a ParamMap,
+    iter: Option<ParamNamesIter<'a>>,
+    params: Option<&'a ParamMap>,
 }
 
 impl<'a> Iterator for ParamIter<'a> {
     type Item = AttrParam<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        let param_val = self.iter.next()?;
-        let value = self.params.get_param(param_val)?;
+        let param_val = self.iter.as_mut()?.next()?;
+        let value = self.params.as_ref()?.get_param(param_val)?;
         Some(AttrParam {
             section_name: self.section_name,
             attr_name: self.attr_name,
