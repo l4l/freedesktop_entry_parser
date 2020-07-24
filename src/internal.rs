@@ -1,4 +1,4 @@
-use crate::{parse_entry, ParseError};
+use crate::{parser::parse_entry, ParseError};
 use std::{
     collections::{hash_map::Keys, HashMap},
     fmt::{Debug, Formatter},

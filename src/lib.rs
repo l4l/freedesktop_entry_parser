@@ -97,7 +97,7 @@
 //!
 //! Example:
 //! ```
-//! use freedesktop_entry_parser::{parse_entry, SectionBytes, AttrBytes};
+//! use freedesktop_entry_parser::low_level::{parse_entry, SectionBytes, AttrBytes};
 //!
 //! let file = b"[Desktop Entry]
 //! Name=Firefox
@@ -120,26 +120,35 @@ pub mod errors;
 mod internal;
 mod parser;
 
-pub use crate::parser::parse_entry;
-pub use crate::parser::AttrBytes;
-pub use crate::parser::EntryIter;
-pub use crate::parser::SectionBytes;
+/// Low level API
+pub mod low_level {
+    pub use crate::parser::parse_entry;
+    pub use crate::parser::AttrBytes;
+    pub use crate::parser::EntryIter;
+    pub use crate::parser::SectionBytes;
+}
 pub use errors::ParseError;
 use internal::{
     AttrNamesIter, AttrValue, Internal, ParamMap, ParamNamesIter,
     SectionNamesIter,
 };
-
 use std::{fs::File, io::Read, path::Path, pin::Pin};
 
-/// Parse a Freedesktop entry
+/// Parse a FreeDesktop entry file.
+pub fn parse_entry(input: impl AsRef<Path>) -> Result<Entry, ParseError> {
+    Entry::parse_file(input)
+}
+
+/// Parse a Freedesktop entry.
 pub struct Entry(Pin<Box<Internal>>);
 
 impl Entry {
+    /// Parse an entry from byte buffer.
     pub fn parse(input: impl Into<Vec<u8>>) -> Result<Self, ParseError> {
         Ok(Entry(Internal::new(input.into())?))
     }
 
+    /// Parse entry from file.
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self, ParseError> {
         let mut file = File::open(path).unwrap();
         let mut buf = Vec::new();
@@ -147,17 +156,17 @@ impl Entry {
         Self::parse(buf)
     }
 
+    /// Check if the entry has a section with a `name`.
     pub fn has_section(&self, name: impl AsRef<str>) -> bool {
         self.0.has_section(name.as_ref())
     }
 
+    /// Get section with `name`.
     pub fn section<'a, T: AsRef<str>>(&'a self, name: T) -> AttrSelector<T> {
-        AttrSelector {
-            name,
-            entry: self,
-        }
+        AttrSelector { name, entry: self }
     }
 
+    /// Iterator over sections.
     pub fn sections(&self) -> SectionIter {
         SectionIter {
             iter: self.0.section_names_iter(),
@@ -195,10 +204,12 @@ pub struct AttrSelector<'a, T: AsRef<str>> {
 }
 
 impl<'a, T: AsRef<str>> AttrSelector<'a, T> {
+    /// Get the value of the attribute `name`.
     pub fn attr(&self, name: impl AsRef<str>) -> Option<&'a str> {
         self.entry.0.get(self.name.as_ref(), name.as_ref(), None)
     }
 
+    /// Check if this section has an attribute with `name`.
     pub fn has_attr(&self, name: impl AsRef<str>) -> bool {
         self.entry
             .0
@@ -206,6 +217,7 @@ impl<'a, T: AsRef<str>> AttrSelector<'a, T> {
             .is_some()
     }
 
+    /// Get the value of the attribute `name` and param value `param_val`.
     pub fn attr_with_param(
         &self,
         name: impl AsRef<str>,
@@ -217,10 +229,26 @@ impl<'a, T: AsRef<str>> AttrSelector<'a, T> {
             .get(section, name.as_ref(), Some(param_val.as_ref()))
     }
 
+    /// Check if this section has an attribute with `name` and param value `param_val`.
+    pub fn has_attr_with_param(
+        &self,
+        name: impl AsRef<str>,
+        param_val: impl AsRef<str>,
+    ) -> bool {
+        let section = self.name.as_ref();
+        self.entry
+            .0
+            .get(section, name.as_ref(), Some(param_val.as_ref()))
+            .is_some()
+    }
+
+    /// Get this section's name.
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
 
+    /// Iterator over attributes in this section
+    // TODO remove None
     pub fn attrs(&'a self) -> Option<AttrIter<'a>> {
         Some(AttrIter {
             section_name: self.name.as_ref(),
@@ -247,14 +275,18 @@ pub struct Attr<'a> {
 }
 
 impl<'a> Attr<'a> {
+    /// Check if this attribute has a value without a param.
     pub fn has_value(&self) -> bool {
         self.attr.get_value().is_some()
     }
 
+    /// Check if this attribute has a param.
     pub fn has_params(&self) -> bool {
         self.attr.get_params().is_some()
     }
 
+    /// Iterator over params
+    // TODO remove None
     pub fn params(&self) -> Option<ParamIter<'a>> {
         Some(ParamIter {
             section_name: self.section_name,
