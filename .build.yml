@@ -2,14 +2,12 @@ image: alpine/edge
 packages:
   - rust
   - cargo
-  - faenza-icon-theme
 sources:
-  - https://git.sr.ht/~zethra/linicon
+  - https://git.sr.ht/~zethra/freedesktop_entry_parser
 tasks:
   - build: |
-      cd linicon
-      cargo build
+      cd freedesktop_entry_parser
+      cargo build --all-features
   - test: |
-      export XDG_DATA_DIRS=$XDG_DATA_DIRS:/usr/share
-      cd linicon
-      cargo test
+      cd freedesktop_entry_parser
+      cargo test --all-features
