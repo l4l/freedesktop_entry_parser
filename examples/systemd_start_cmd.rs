@@ -1,7 +1,8 @@
-use freedesktop_entry_parser::{Entry, ParseError};
+use freedesktop_entry_parser::parse_entry;
+use std::io::Result;
 
-fn main() -> Result<(), ParseError> {
-    let entry = Entry::parse_file("./test_data/sshd.service")?;
+fn main() -> Result<()> {
+    let entry = parse_entry("./test_data/sshd.service")?;
     let start_cmd = entry
         .section("Service")
         .attr("ExecStart")

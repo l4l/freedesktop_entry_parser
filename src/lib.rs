@@ -85,7 +85,7 @@
 //!     .expect("Attribute doesn't exist");
 //! println!("{}", start_cmd);
 //!
-//! # Ok::<(), freedesktop_entry_parser::ParseError>(())
+//! # Ok::<(), std::io::Error>(())
 //! ```
 //! There are more examples in the [`examples`]() directory.
 //!
@@ -117,9 +117,9 @@
 
 /// `Debug` trait impls
 mod debug;
-/// Eror types
+/// Error types
 pub mod errors;
-/// Entry map inplementaion
+/// Entry map implementation
 mod internal;
 /// Low level parser
 mod parser;
@@ -131,15 +131,23 @@ pub mod low_level {
     pub use crate::parser::EntryIter;
     pub use crate::parser::SectionBytes;
 }
-pub use errors::{Result, ParseError};
+pub use errors::{ParseError, Result};
 use internal::{
     AttrNamesIter, AttrValue, Internal, ParamMap, ParamNamesIter,
     SectionNamesIter,
 };
-use std::{fs::File, io::Read, path::Path, pin::Pin};
+use std::{
+    fs::File,
+    io::{self, Read},
+    path::Path,
+    pin::Pin,
+};
 
 /// Parse a FreeDesktop entry file.
-pub fn parse_entry(input: impl AsRef<Path>) -> Result<Entry> {
+///
+/// If there is a parse error it'll be return an crate::Error wrapped io::Error
+/// with the ErrorKind::Other.
+pub fn parse_entry(input: impl AsRef<Path>) -> io::Result<Entry> {
     Entry::parse_file(input)
 }
 
@@ -153,11 +161,14 @@ impl Entry {
     }
 
     /// Parse entry from file.
-    pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
-        let mut file = File::open(path).unwrap();
+    ///
+    /// If there is a parse error it'll be return an crate::Error wrapped io::Error
+    /// with the ErrorKind::Other.
+    pub fn parse_file(path: impl AsRef<Path>) -> io::Result<Self> {
+        let mut file = File::open(path)?;
         let mut buf = Vec::new();
-        file.read_to_end(&mut buf).unwrap();
-        Self::parse(buf)
+        file.read_to_end(&mut buf)?;
+        Self::parse(buf).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 
     /// Check if the entry has a section with a `name`.
@@ -293,10 +304,7 @@ impl<'a> Attr<'a> {
         ParamIter {
             section_name: self.section_name,
             attr_name: self.name,
-            iter: self
-                .entry
-                .0
-                .param_names_iter(self.section_name, self.name),
+            iter: self.entry.0.param_names_iter(self.section_name, self.name),
             params: self.attr.get_params(),
         }
     }
