@@ -4,7 +4,7 @@
 
 [package]
 name = "freedesktop_entry_parser"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["zethra <benaagoldberg@gmail.com>"]
 description = "A library for parsing FreeDesktop entry files"
 categories = ["os", "os::unix-apis"]
