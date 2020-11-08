@@ -53,3 +53,10 @@ see the [exmaples in the repo](examples).
 
 [docs]: https://docs.rs/freedesktop_entry_parser/0.4.0/freedesktop_entry_parser/
 [examples]: https://git.sr.ht/~zethra/freedesktop_entry_parser/tree/master/examples
+
+## Contributing
+
+Please send any and all patches, bugs, and questions to my public inbox
+[~zethra/public-inbox@lists.sr.ht](mailto:~zethra/public-inbox@lists.sr.ht)
+or submit a ticket to the bug tracker if you feel so inclined
+[todo.sr.ht/~zethra/linicon](https://todo.sr.ht/~zethra/linicon).
