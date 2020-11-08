@@ -5,8 +5,8 @@
 
 A library for parsing FreeDesktop entry files in Rust.
 These files are used in the [Desktop Entry](desktop_spec),
-[Icon Theme](icon_spec), and [Systemd Unit](systemd) file. They are similar to ini files but are
-distinct enough that an ini parse would not work.
+[Icon Theme](icon_spec), and [Systemd Unit](systemd) file. They are similar to
+ini files but are distinct enough that an ini parse would not work.
 
 [desktop_spec]: https://specifications.freedesktop.org/desktop-entry-spec/desktop-entry-spec-latest.html
 [icon_spec]: https://specifications.freedesktop.org/icon-theme-spec/icon-theme-spec-latest.html
@@ -15,7 +15,8 @@ distinct enough that an ini parse would not work.
 ## Example Usage
 
 As example input lets use the contents of `sshd.service`
-```
+
+```text
 [Unit]
 Description=OpenSSH Daemon
 Wants=sshdgenkeys.service
@@ -33,7 +34,8 @@ WantedBy=multi-user.target
 ```
 
 For example, to print the start command we could do this:
-```
+
+```rust
 use freedesktop_entry_parser::parse_entry;
 
 let entry = parse_entry("./test_data/sshd.service")?;
@@ -42,14 +44,13 @@ let start_cmd = entry
     .attr("ExecStart")
     .expect("Attribute doesn't exist");
 println!("{}", start_cmd);
-
-# Ok::<(), freedesktop_entry_parser::ParseError>(())
 ```
+
 This prints `/usr/bin/sshd -D`
 
-For more extensive documentaion see [docs.rs](docs) or generate the docs
+For more extensive documentation see [docs.rs](docs) or generate the docs
 yourself by cloning the repo and running `cargo doc`.  For more examples
-see the [exmaples in the repo](examples).
+see the [examples in the repo](examples).
 
 [docs]: https://docs.rs/freedesktop_entry_parser/0.4.0/freedesktop_entry_parser/
 [examples]: https://git.sr.ht/~zethra/freedesktop_entry_parser/tree/master/examples
