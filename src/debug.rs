@@ -10,11 +10,11 @@ impl<'a> Debug for AttrBytes<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let name = match from_utf8(self.name) {
             Ok(s) => s.to_owned(),
-            Err(_) => format!("{:?}", self.name).to_owned(),
+            Err(_) => format!("{:?}", self.name),
         };
         let value = match from_utf8(self.value) {
             Ok(s) => s.to_owned(),
-            Err(_) => format!("{:?}", self.value).to_owned(),
+            Err(_) => format!("{:?}", self.value),
         };
         f.debug_struct("AttrBytes")
             .field("name", &name)
@@ -28,7 +28,7 @@ impl<'a> Debug for SectionBytes<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let title = match from_utf8(self.title) {
             Ok(s) => s.to_owned(),
-            Err(_) => format!("{:?}", self.title).to_owned(),
+            Err(_) => format!("{:?}", self.title),
         };
         f.debug_struct("SectionBytes")
             .field("title", &title)
@@ -41,11 +41,11 @@ impl<'a> Debug for ParamBytes<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let attr_name = match from_utf8(self.attr_name) {
             Ok(s) => s.to_owned(),
-            Err(_) => format!("{:?}", self.attr_name).to_owned(),
+            Err(_) => format!("{:?}", self.attr_name),
         };
         let param = match from_utf8(self.param) {
             Ok(s) => s.to_owned(),
-            Err(_) => format!("{:?}", self.param).to_owned(),
+            Err(_) => format!("{:?}", self.param),
         };
         f.debug_struct("AttrBytes")
             .field("attr_name", &attr_name)

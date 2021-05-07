@@ -136,6 +136,8 @@ impl Internal {
         self.get_section(section_name).is_some()
     }
 
+    // Clippy is wrong here
+    #[allow(clippy::needless_lifetimes)]
     pub(crate) fn section_names_iter<'a>(
         self: &'a Pin<Box<Self>>,
     ) -> SectionNamesIter<'a> {
@@ -168,11 +170,11 @@ impl AttrMap {
 }
 
 impl AttrValue {
-    pub(crate) fn get_value<'a>(&'a self) -> Option<&'a str> {
+    pub(crate) fn get_value(&self) -> Option<&str> {
         // SAFETY: This is safe because the string has the same lifetime as Entry
         self.value
             .as_ref()
-            .map(|s| unsafe { transmute(s.0.as_ptr()) })
+            .map(|s| unsafe { transmute(&*s.0.as_ptr()) })
     }
 
     pub(crate) fn get_params(&self) -> Option<&ParamMap> {
@@ -189,7 +191,7 @@ impl ParamMap {
         self.0
             .get(&SP::from(param_val))
             // SAFETY: This is safe because the string has the same lifetime as Entry
-            .map(|s| unsafe { transmute(s.0.as_ptr()) })
+            .map(|s| unsafe { transmute(&*s.0.as_ptr()) })
     }
 }
 
@@ -198,7 +200,7 @@ pub(crate) struct KeysIter<'a, T>(Keys<'a, SP, T>);
 impl<'a, T> Iterator for KeysIter<'a, T> {
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().map(|sp| unsafe { transmute(sp.0.as_ptr()) })
+        self.0.next().map(|sp| unsafe { transmute(&*sp.0.as_ptr()) })
     }
 }
 

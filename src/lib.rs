@@ -177,7 +177,7 @@ impl Entry {
     }
 
     /// Get section with `name`.
-    pub fn section<'a, T: AsRef<str>>(&'a self, name: T) -> AttrSelector<T> {
+    pub fn section<T: AsRef<str>>(&self, name: T) -> AttrSelector<T> {
         AttrSelector { name, entry: self }
     }
 

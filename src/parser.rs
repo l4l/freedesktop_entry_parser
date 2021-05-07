@@ -37,12 +37,12 @@ pub struct SectionBytes<'a> {
 }
 
 fn not_whitespace(c: u8) -> bool {
-    c != '\n' as u8 && c != '\t' as u8 && c != '\r' as u8 && c != ' ' as u8
+    c != b'\n' && c != b'\t' && c != b'\r' && c != b' '
 }
 
 /// Parse a header line.  Return the header name
 fn header(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    delimited(tag(b"["), take_till1(|c| c == ']' as u8), tag(b"]"))(input)
+    delimited(tag(b"["), take_till1(|c| c == b']'), tag(b"]"))(input)
 }
 
 /// Find the next line, ignoring comments
@@ -51,33 +51,33 @@ fn next_line(input: &[u8]) -> Result<&[u8], nom::Err<(&[u8], ErrorKind)>> {
         return Ok(b"");
     }
     let (rem, _) = take_till(not_whitespace)(input)?;
-    if rem.get(0) == Some(&('#' as u8)) {
-        let (rem, _) = take_till(|c| c == '\n' as u8)(rem)?;
+    if rem.get(0) == Some(&(b'#')) {
+        let (rem, _) = take_till(|c| c == b'\n')(rem)?;
         return next_line(rem);
     }
     Ok(rem)
 }
 
 fn find_start(input: &[u8]) -> Result<&[u8], nom::Err<(&[u8], ErrorKind)>> {
-    let (rem, _): (&[u8], &[u8]) = take_till(|c| c == '[' as u8)(input)?;
+    let (rem, _): (&[u8], &[u8]) = take_till(|c| c == b'[')(input)?;
     Ok(rem)
 }
 
 /// Parse attr params
 fn params(input: &[u8]) -> IResult<&[u8], ParamBytes> {
     let (rem, attr_name) =
-        terminated(take_till(|c| c == '[' as u8), tag(b"["))(input)?;
-    let (rem, param) = take_till(|c| c == ']' as u8)(rem)?;
-    Ok((rem, ParamBytes { attr_name, param }))
+        terminated(take_till(|c| c == b'['), tag(b"["))(input)?;
+    let (rem, param) = take_till(|c| c == b']')(rem)?;
+    Ok((rem, ParamBytes { param, attr_name }))
 }
 
 fn attr(input: &[u8]) -> IResult<&[u8], AttrBytes> {
-    if input.get(0) == Some(&('[' as u8)) {
+    if input.get(0) == Some(&(b'[')) {
         return Err(nom::Err::Error((input, ErrorKind::Complete)));
     }
     let (rem, name) =
-        terminated(take_till(|c| c == '=' as u8), tag(b"="))(input)?;
-    let (rem, value) = take_till(|c| c == '\n' as u8)(rem)?;
+        terminated(take_till(|c| c == b'='), tag(b"="))(input)?;
+    let (rem, value) = take_till(|c| c == b'\n')(rem)?;
 
     Ok((
         next_line(rem)?,
@@ -109,7 +109,7 @@ impl<'a> EntryIter<'a> {
             self.rem = find_start(self.rem)?;
             self.found_start = true;
         }
-        let (rem, _): (&[u8], &[u8]) = take_till(|c| c == '[' as u8)(self.rem)?;
+        let (rem, _): (&[u8], &[u8]) = take_till(|c| c == b'[')(self.rem)?;
         let (rem, section_bytes) = section(rem)?;
         self.rem = rem;
         Ok(section_bytes)
@@ -129,7 +129,7 @@ impl<'a> Iterator for EntryIter<'a> {
 
 /// Parse a FreeDesktop entry file.
 /// Returns and iterator over the sections in the file.
-pub fn parse_entry<'a>(input: &'a [u8]) -> EntryIter<'a> {
+pub fn parse_entry(input: &[u8]) -> EntryIter<'_> {
     EntryIter {
         rem: input,
         found_start: false,
