@@ -46,7 +46,9 @@ fn header(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Find the next line, ignoring comments
-fn next_line(input: &[u8]) -> Result<&[u8], nom::Err<(&[u8], ErrorKind)>> {
+fn next_line(
+    input: &[u8],
+) -> Result<&[u8], nom::Err<nom::error::Error<&[u8]>>> {
     if input.is_empty() {
         return Ok(b"");
     }
@@ -58,9 +60,8 @@ fn next_line(input: &[u8]) -> Result<&[u8], nom::Err<(&[u8], ErrorKind)>> {
     Ok(rem)
 }
 
-fn find_start(input: &[u8]) -> Result<&[u8], nom::Err<(&[u8], ErrorKind)>> {
-    let (rem, _): (&[u8], &[u8]) = take_till(|c| c == b'[')(input)?;
-    Ok(rem)
+fn find_start(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    take_till(|c| c == b'[')(input)
 }
 
 /// Parse attr params
@@ -73,10 +74,12 @@ fn params(input: &[u8]) -> IResult<&[u8], ParamBytes> {
 
 fn attr(input: &[u8]) -> IResult<&[u8], AttrBytes> {
     if input.get(0) == Some(&(b'[')) {
-        return Err(nom::Err::Error((input, ErrorKind::Complete)));
+        return Err(nom::Err::Error(nom::error::Error::new(
+            input,
+            ErrorKind::Complete,
+        )));
     }
-    let (rem, name) =
-        terminated(take_till(|c| c == b'='), tag(b"="))(input)?;
+    let (rem, name) = terminated(take_till(|c| c == b'='), tag(b"="))(input)?;
     let (rem, value) = take_till(|c| c == b'\n')(rem)?;
 
     Ok((
@@ -106,10 +109,10 @@ pub struct EntryIter<'a> {
 impl<'a> EntryIter<'a> {
     fn next_section(&mut self) -> Result<SectionBytes<'a>, ParseError> {
         if !self.found_start {
-            self.rem = find_start(self.rem)?;
+            self.rem = find_start(self.rem)?.0;
             self.found_start = true;
         }
-        let (rem, _): (&[u8], &[u8]) = take_till(|c| c == b'[')(self.rem)?;
+        let (rem, _) = find_start(self.rem)?;
         let (rem, section_bytes) = section(rem)?;
         self.rem = rem;
         Ok(section_bytes)
@@ -151,16 +154,22 @@ mod test {
         #[test]
         fn no_start() {
             assert_eq!(
-                header(b"hello"),
-                Err(nom::Err::Error((&b"hello"[..], ErrorKind::Tag)))
+                header(b"hello").unwrap_err(),
+                nom::Err::Error(nom::error::make_error(
+                    &b"hello"[..],
+                    ErrorKind::Tag
+                ))
             );
         }
 
         #[test]
         fn no_end() {
             assert_eq!(
-                header(b"[hello"),
-                Err(nom::Err::Error((&b""[..], ErrorKind::Tag)))
+                header(b"[hello").unwrap_err(),
+                nom::Err::Error(nom::error::make_error(
+                    &b""[..],
+                    ErrorKind::Tag
+                ))
             );
         }
     }
@@ -276,7 +285,10 @@ mod test {
         fn no_eq() {
             assert_eq!(
                 attr(b"hello"),
-                Err(nom::Err::Error((&b""[..], ErrorKind::Tag)))
+                Err(nom::Err::Error(nom::error::Error {
+                    input: &b""[..],
+                    code: ErrorKind::Tag
+                }))
             );
         }
     }
@@ -313,7 +325,10 @@ mod test {
         fn no_attrs() {
             assert_eq!(
                 section(b"[apps]\n"),
-                Err(nom::Err::Error((&b""[..], ErrorKind::Tag)))
+                Err(nom::Err::Error(nom::error::Error {
+                    input: &b""[..],
+                    code: ErrorKind::Tag
+                }))
             );
         }
 
@@ -321,10 +336,10 @@ mod test {
         fn no_header() {
             assert_eq!(
                 section(b"Size=48\nScale=1"),
-                Err(nom::Err::Error((
-                    &b"Size=48\nScale=1"[..],
-                    ErrorKind::Tag
-                )))
+                Err(nom::Err::Error(nom::error::Error {
+                    input: &b"Size=48\nScale=1"[..],
+                    code: ErrorKind::Tag
+                }))
             );
         }
     }

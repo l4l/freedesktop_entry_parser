@@ -1,8 +1,8 @@
-use nom::error::ErrorKind;
+use nom::error::{Error as NomError, ErrorKind};
 use std::str::Utf8Error;
 use thiserror::Error;
 
-pub type Result<T>=std::result::Result<T, ParseError>;
+pub type Result<T> = std::result::Result<T, ParseError>;
 
 /// An error that occurred while parsing. This is the general error type for
 /// this library.
@@ -38,19 +38,19 @@ pub enum ErrorBytes {
     Invalid(Vec<u8>),
 }
 
-impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for ParseError {
-    fn from(e: nom::Err<(&[u8], nom::error::ErrorKind)>) -> Self {
-        match e.to_owned() {
-            nom::Err::Error((bytes, kind))
-            | nom::Err::Failure((bytes, kind)) => {
-                match std::str::from_utf8(&bytes) {
+impl From<nom::Err<NomError<&[u8]>>> for ParseError {
+    fn from(e: nom::Err<NomError<&[u8]>>) -> Self {
+        match e {
+            nom::Err::Error(NomError { input, code })
+            | nom::Err::Failure(NomError { input, code }) => {
+                match std::str::from_utf8(&input) {
                     Ok(s) => ParseError::Other {
                         at: ErrorBytes::Valid(s.to_owned()),
-                        kind,
+                        kind: code,
                     },
                     Err(_) => ParseError::Other {
-                        at: ErrorBytes::Invalid(bytes),
-                        kind,
+                        at: ErrorBytes::Invalid(input.to_vec()),
+                        kind: code,
                     },
                 }
             }

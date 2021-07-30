@@ -17,5 +17,5 @@ license = "MPL-2.0"
 include = ["src/**/*", "LICENSE", "README.md"]
 
 [dependencies]
-nom = "5.1"
+nom = "6"
 thiserror = "1.0"
